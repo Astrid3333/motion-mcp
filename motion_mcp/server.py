@@ -22,10 +22,13 @@ mcp = MCPServer(
     version=__version__,
     instructions=(
         "Motion graphics / After Effects-like composition: layer comps with "
-        "position/scale/rotation/opacity/blend keyframes, blur/glow/color/"
-        "chroma-key/vignette effects, wave/barrel/swirl distortion, masks, "
-        "animated text, slow-motion retiming, and ffmpeg rendering to MP4 "
-        "or extraction to frames."
+        "position/scale/rotation/opacity/blend keyframes, a catalog of 27 "
+        "image effects (blur/glow/color/chroma-key/vignette, wave/barrel/"
+        "swirl distortion, pixelate/noise/rgb_split, invert/grayscale/sepia/"
+        "posterize/threshold/duotone/hue/solarize, sharpen/emboss/edge/"
+        "scanlines, mirror/zoom/rotate/roll), masks, animated text, "
+        "slow-motion retiming, and ffmpeg rendering to MP4 or extraction to "
+        "frames. Call motion_list_effects for the catalog with parameters."
     ),
 )
 
@@ -64,18 +67,32 @@ def motion_keyframes(keyframes: list[dict[str, Any]],
 
 
 @mcp.tool()
+def motion_list_effects() -> dict[str, Any]:
+    """Catálogo de efectos disponibles con sus parámetros y valores por
+    defecto (para motion_apply_effect)."""
+    return {"ok": True, "count": len(effects_mod.EFFECTS),
+            "effects": {name: defaults
+                        for name, (fn, defaults)
+                        in effects_mod.EFFECTS.items()}}
+
+
+@mcp.tool()
 def motion_apply_effect(image: str, effect: str, output: str,
                         **params: Any) -> dict[str, Any]:
     """Aplica un efecto a una imagen y guarda el resultado.
 
-    effect: blur | glow | color | chroma_key | vignette | wave | barrel | swirl
-    params: blur->radius; glow->radius,intensity;
-            color->brightness,contrast,saturation;
-            chroma_key->key_color,tolerance,softness;
-            vignette->amount;
-            wave->amplitude,wavelength,phase,vertical;
-            barrel->strength (0.3=pez, negativo=cojín);
-            swirl->strength
+    effect: uno de los 27 de motion_list_effects. Params (todos opcionales):
+      base: blur(radius) glow(radius,intensity) color(brightness,contrast,
+        saturation) chroma_key(key_color,tolerance,softness) vignette(amount)
+      distorsión: wave(amplitude,wavelength,phase,vertical) barrel(strength,
+        >0 ojo de pez, <0 cojín) swirl(strength)
+      estilo: pixelate(block) mirror(axis) noise(amount,seed)
+        rgb_split(offset) scanlines(spacing,opacity) zoom(factor)
+        rotate(degrees) roll(dx,dy)
+      color/valor: invert() grayscale() sepia() posterize(levels)
+        threshold(level) duotone(dark,light) hue(shift) solarize(threshold)
+        sharpen(amount,radius) emboss() edge()
+    Parámetro desconocido → error con la lista de los permitidos.
     """
     image = _abs(image)
     output = _abs(output)

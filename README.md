@@ -1,9 +1,9 @@
 # motion-mcp
 
 MCP server de motion graphics al estilo After Effects: composición por capas,
-keyframes, efectos (blur/glow/color/chroma-key/vignette + distorsión
-wave/barrel/swirl), máscaras alpha, texto animado, cámara lenta (retime) y
-render de frames a video con ffmpeg.
+keyframes, catálogo de **27 efectos** (base, distorsión, estilo, color/valor),
+máscaras alpha, texto animado, cámara lenta (retime) y render de frames a
+video con ffmpeg.
 
 ## Instalación
 
@@ -25,7 +25,8 @@ Registrado en `opencode.json` del workbench (sección `mcp`, `enabled: true`).
 | --- | --- |
 | `motion_compose_layers` | Composición por capas con posición, escala, rotación, opacidad, blend y keyframes; render a frames PNG |
 | `motion_keyframes` | Interpola keyframes [{time, value}] en tiempos dados (números o tuplas) |
-| `motion_apply_effect` | Efecto sobre imagen: blur, glow, color, chroma_key, vignette, **wave, barrel, swirl** (distorsión) |
+| `motion_list_effects` | Catálogo de los 27 efectos con parámetros y defaults |
+| `motion_apply_effect` | Aplica un efecto (ver catálogo abajo) |
 | `motion_add_mask` | Máscara alpha: circle, rect o from_image (otra imagen como máscara) |
 | `motion_add_text` | Texto sobre imagen (posición, tamaño, color, ancla) |
 | `motion_retime` | **Cámara lenta/rápida**: re-muestrea la secuencia (speed 0.5 = 2x lento; modes duplicate/blend) |
@@ -52,6 +53,41 @@ Parámetros de distorsión:
 - `wave`: `amplitude` (px), `wavelength` (px), `phase` (rad), `vertical` (bool)
 - `barrel`: `strength` (>0 ojo de pez, <0 cojín), default 0.3
 - `swirl`: `strength` (radianes máx. en el centro), default 1.5
+
+## Catálogo de efectos (27)
+
+| Grupo | Efecto | Params (default) |
+| --- | --- | --- |
+| base | `blur` | `radius` (4.0) |
+| base | `glow` | `radius` (8.0), `intensity` (0.6) |
+| base | `color` | `brightness`, `contrast`, `saturation` (1.0) |
+| base | `chroma_key` | `key_color` (#00ff00), `tolerance` (40), `softness` (10) |
+| base | `vignette` | `amount` (0.5) |
+| distorsión | `wave` | `amplitude` (12), `wavelength` (60), `phase` (0), `vertical` |
+| distorsión | `barrel` | `strength` (0.3) |
+| distorsión | `swirl` | `strength` (1.5) |
+| estilo | `pixelate` | `block` (12) |
+| estilo | `mirror` | `axis` (horizontal) |
+| estilo | `noise` | `amount` (25), `seed` (0) |
+| estilo | `rgb_split` | `offset` (6) |
+| estilo | `scanlines` | `spacing` (4), `opacity` (0.4) |
+| estilo | `zoom` | `factor` (1.5) |
+| estilo | `rotate` | `degrees` (0) |
+| estilo | `roll` | `dx` (0), `dy` (0) — wrap/glitch |
+| color | `invert` | — |
+| color | `grayscale` | — |
+| color | `sepia` | — |
+| color | `posterize` | `levels` (6) |
+| color | `threshold` | `level` (128) |
+| color | `duotone` | `dark` (#1a1a4d), `light` (#ffd700) |
+| color | `hue` | `shift` (30°) |
+| color | `solarize` | `threshold` (128) |
+| filtro | `sharpen` | `amount` (150), `radius` (2.0) |
+| filtro | `emboss` | — |
+| filtro | `edge` | — |
+
+`noise` es reproducible (mismo `seed` ⇒ mismos píxeles). Parámetro desconocido
+→ error con la lista de permitidos.
 
 Ejemplo de capa con keyframes:
 

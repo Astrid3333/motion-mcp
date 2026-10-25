@@ -269,3 +269,91 @@ def test_retime_duplicate_and_errors(tmp_path):
     empty = server.motion_retime(str(tmp_path / "missing"),
                                  str(tmp_path / "z"))
     assert empty["ok"] is False and "frames" in empty["error"]
+
+
+def test_list_effects_catalog():
+    res = server.motion_list_effects()
+    assert res["ok"] is True
+    assert res["count"] == 27
+    for name in ("blur", "wave", "pixelate", "duotone", "roll"):
+        assert name in res["effects"]
+    # cada entrada tiene sus defaults
+    assert res["effects"]["pixelate"] == {"block": 12}
+
+
+def test_all_effects_apply(tmp_path):
+    """Los 27 efectos corren con defaults y preservan el tamaño."""
+    import pytest
+    src = tmp_path / "in.png"
+    _make_png(src, color=(180, 90, 40, 255))
+    names = sorted(effects.EFFECTS)
+    assert len(names) == 27
+    for name in names:
+        out = tmp_path / f"out_{name}.png"
+        res = server.motion_apply_effect(str(src), name, str(out))
+        assert res["ok"] is True, (name, res)
+        assert out.is_file(), name
+        assert Image.open(out).size == (200, 200), name
+
+
+def test_effect_semantics(tmp_path):
+    src = tmp_path / "in.png"
+    out = tmp_path / "out.png"
+    # invert: rojo -> cian
+    _make_png(src, color=(255, 0, 0, 255))
+    server.motion_apply_effect(str(src), "invert", str(out))
+    assert Image.open(out).convert("RGB").getpixel((10, 10)) == (0, 255, 255)
+    # grayscale: rojo -> gris 76 (0.299*255)
+    server.motion_apply_effect(str(src), "grayscale", str(out))
+    g = Image.open(out).convert("RGB").getpixel((10, 10))
+    assert g[0] == g[1] == g[2] and abs(g[0] - 76) <= 1
+    # mirror horizontal: mitad izq. roja vuelve a la derecha
+    img = Image.new("RGBA", (200, 200), (0, 0, 255, 255))
+    for x in range(100):
+        for y in range(200):
+            img.putpixel((x, y), (255, 0, 0, 255))
+    img.save(src)
+    server.motion_apply_effect(str(src), "mirror", str(out))
+    got = Image.open(out).convert("RGB")
+    assert got.getpixel((10, 10)) == (0, 0, 255)
+    assert got.getpixel((190, 10)) == (255, 0, 0)
+    # noise determinista con el mismo seed
+    _make_png(src, color=(100, 100, 100, 255))
+    server.motion_apply_effect(str(src), "noise", str(out), seed=42,
+                               amount=40)
+    a = Path(out).read_bytes()
+    server.motion_apply_effect(str(src), "noise", str(out), seed=42,
+                               amount=40)
+    assert Path(out).read_bytes() == a
+    # threshold: negro/blanco puros
+    _make_png(src, color=(200, 200, 200, 255))
+    server.motion_apply_effect(str(src), "threshold", str(out))
+    px = Image.open(out).convert("RGB").getpixel((10, 10))
+    assert px == (255, 255, 255)
+
+
+def test_effect_unknown_param(tmp_path):
+    src = tmp_path / "in.png"
+    _make_png(src)
+    res = server.motion_apply_effect(str(src), "blur", str(tmp_path / "o.png"),
+                                     bogus=1)
+    assert res["ok"] is False
+    assert "unknown params" in res["error"]
+    assert "allowed" in res["error"]
+
+
+def test_chroma_key_semantics(tmp_path):
+    """Fondo verde transparente, sujeto azul opaco (y sin overflow NaN)."""
+    img = Image.new("RGBA", (200, 200), (0, 255, 0, 255))
+    for x in range(60, 140):
+        for y in range(60, 140):
+            img.putpixel((x, y), (0, 0, 255, 255))
+    src = tmp_path / "in.png"
+    out = tmp_path / "out.png"
+    img.save(src)
+    res = server.motion_apply_effect(str(src), "chroma_key", str(out))
+    assert res["ok"] is True, res
+    got = Image.open(out)
+    assert got.getpixel((5, 5))[3] == 0        # fondo verde -> transparente
+    assert got.getpixel((100, 100))[3] == 255  # sujeto azul -> opaco
+    assert got.getpixel((100, 100))[:3] == (0, 0, 255)
