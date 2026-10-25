@@ -45,7 +45,8 @@ def motion_compose_layers(spec: dict[str, Any],
       background: color hex o "transparent"
       layers: [ { source, position, scale, rotation, opacity, blend, anchor } ]
         position/scale/rotation/opacity pueden ser valor fijo o lista de
-        keyframes [{time, value}, ...].
+        keyframes [{time, value}, ...] (inline), o bien animar con un bloque
+        anidado "keyframes": { "<prop>": [{time, value}, ...] }.
     """
     return compose_mod.render_composition(spec, output_dir)
 
@@ -54,7 +55,7 @@ def motion_compose_layers(spec: dict[str, Any],
 def motion_keyframes(keyframes: list[dict[str, Any]],
                      times: list[float]) -> dict[str, Any]:
     """Interpola keyframes [{time, value}] en los tiempos dados (segundos).
-    Soporta valores numéricos y tuplas (x,y)/(r,g,b,a)."""
+    Soporta valores numéricos y listas/tuplas (x,y)/(r,g,b,a)."""
     kfs = [keyframes_mod.Keyframe(time=float(k["time"]), value=k["value"])
            for k in keyframes]
     values = keyframes_mod.keyframe_values(kfs, times)

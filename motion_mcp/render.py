@@ -22,7 +22,11 @@ def render_sequence(frames_dir: str, output: str, fps: int = 30,
         "ffmpeg", "-y", "-r", str(fps), "-i", pattern,
         "-c:v", codec, "-crf", str(crf), "-pix_fmt", pix_fmt, output,
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "output": output, "fps": fps,
+                "error": f"ffmpeg failed: {exc}"}
     ok = proc.returncode == 0 and Path(output).exists()
     return {
         "ok": ok,
@@ -48,7 +52,11 @@ def extract_frames(video: str, output_dir: str, fps: int | None = None,
     if fps is not None:
         cmd += ["-r", str(fps)]
     cmd += [str(out / "frame_%05d.png")]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"ok": False, "output_dir": str(out), "frame_count": 0,
+                "fps": fps, "frames": [], "error": f"ffmpeg failed: {exc}"}
     produced = sorted(p for p in out.iterdir() if p.suffix == ".png")
     return {
         "ok": proc.returncode == 0,

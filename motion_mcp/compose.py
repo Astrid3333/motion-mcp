@@ -28,6 +28,19 @@ class LayerSpec:
     anchor: str = "center"
 
 
+def _layer_from_spec(raw: dict[str, Any]) -> LayerSpec:
+    """Construye un LayerSpec aceptando keyframes anidados o inline.
+
+    Acepta dos formas de animar:
+      - inline:    {"position": [{"time": 0, "value": ...}, ...]}
+      - anidados:  {"keyframes": {"position": [{"time": 0, "value": ...}]}}
+    """
+    l = dict(raw)
+    for prop, kf_list in (l.pop("keyframes", {}) or {}).items():
+        l[prop] = kf_list
+    return LayerSpec(**l)
+
+
 def _coerce(value: Any, t: float) -> Any:
     """Resuelve un valor fijo o una lista de keyframes en el tiempo t."""
     if isinstance(value, list) and value and isinstance(value[0], dict):
@@ -115,7 +128,7 @@ def render_composition(spec: dict[str, Any], output_dir: str) -> dict[str, Any]:
     fps = float(spec.get("fps", 30))
     duration = float(spec.get("duration_seconds", 5))
     bg = spec.get("background", "transparent")
-    layers = [LayerSpec(**l) for l in spec.get("layers", [])]
+    layers = [_layer_from_spec(l) for l in spec.get("layers", [])]
 
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -146,7 +159,9 @@ def render_composition(spec: dict[str, Any], output_dir: str) -> dict[str, Any]:
                 x -= lw / 2
                 y -= lh / 2
             layer_img = Image.new("RGBA", size, (0, 0, 0, 0))
-            layer_img.paste(img, (int(x), int(y)), img)
+            # sin máscara: el alpha propio de img ya controla la opacidad;
+            # alpha_composite después hace la mezcla exactamente una vez
+            layer_img.paste(img, (int(x), int(y)))
             canvas = _blend(canvas, layer_img, layer.blend)
         frame_path = out / f"frame_{i:05d}.png"
         canvas.convert("RGB").save(frame_path)
