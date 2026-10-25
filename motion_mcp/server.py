@@ -23,8 +23,9 @@ mcp = MCPServer(
     instructions=(
         "Motion graphics / After Effects-like composition: layer comps with "
         "position/scale/rotation/opacity/blend keyframes, blur/glow/color/"
-        "chroma-key/vignette effects, masks, animated text, and ffmpeg "
-        "rendering to MP4 or extraction to frames."
+        "chroma-key/vignette effects, wave/barrel/swirl distortion, masks, "
+        "animated text, slow-motion retiming, and ffmpeg rendering to MP4 "
+        "or extraction to frames."
     ),
 )
 
@@ -67,11 +68,14 @@ def motion_apply_effect(image: str, effect: str, output: str,
                         **params: Any) -> dict[str, Any]:
     """Aplica un efecto a una imagen y guarda el resultado.
 
-    effect: blur | glow | color | chroma_key | vignette
+    effect: blur | glow | color | chroma_key | vignette | wave | barrel | swirl
     params: blur->radius; glow->radius,intensity;
             color->brightness,contrast,saturation;
             chroma_key->key_color,tolerance,softness;
-            vignette->amount
+            vignette->amount;
+            wave->amplitude,wavelength,phase,vertical;
+            barrel->strength (0.3=pez, negativo=cojín);
+            swirl->strength
     """
     image = _abs(image)
     output = _abs(output)
@@ -176,6 +180,20 @@ def motion_extract_frames(video: str, output_dir: str,
                           end: float | None = None) -> dict[str, Any]:
     """Extrae frames de un video a imágenes PNG numeradas."""
     return render_mod.extract_frames(video, output_dir, fps, start, end)
+
+
+@mcp.tool()
+def motion_retime(frames_dir: str, output_dir: str, speed: float = 0.5,
+                  mode: str = "blend") -> dict[str, Any]:
+    """Cámara lenta / rápida: re-muestrea una secuencia de frames.
+
+    speed: 0.5 = cámara lenta 2x, 2.0 = rápida 2x. Renderiza la salida con
+    motion_render_sequence al MISMO fps que la secuencia original para
+    obtener la duración multiplicada por 1/speed.
+    mode: "duplicate" (frames exactos) | "blend" (crossfade suave).
+    """
+    return render_mod.retime_sequence(_abs(frames_dir), _abs(output_dir),
+                                      speed=speed, mode=mode)
 
 
 def main() -> None:

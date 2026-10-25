@@ -155,3 +155,117 @@ def test_extract_frames(tmp_path):
     res = render.extract_frames(str(video), str(frames_dir), fps=10)
     assert res["ok"] is True, res
     assert res["frame_count"] == 10
+
+
+def _half_half_png(path, size=(200, 200)):
+    """Mitad izquierda roja, derecha azul (para detectar desplazamiento)."""
+    img = Image.new("RGBA", size, (0, 0, 255, 255))
+    for x in range(size[0] // 2):
+        for y in range(size[1]):
+            img.putpixel((x, y), (255, 0, 0, 255))
+    img.save(path)
+
+
+def test_distort_wave(tmp_path):
+    src = tmp_path / "in.png"
+    out = tmp_path / "out.png"
+    _half_half_png(src)
+    res = server.motion_apply_effect(str(src), "wave", str(out),
+                                     amplitude=15, wavelength=50,
+                                     vertical=True)
+    assert res["ok"] is True, res
+    orig = Image.open(src).convert("RGB")
+    got = Image.open(out).convert("RGB")
+    # vertical=True desplaza en x: filas con seno alto cruzan la frontera
+    assert any(got.getpixel((x, y)) != orig.getpixel((x, y))
+               for x in (95, 100, 105) for y in range(0, 200, 7))
+    assert got.size == orig.size
+
+
+def test_distort_barrel(tmp_path):
+    src = tmp_path / "in.png"
+    out = tmp_path / "out.png"
+    # cuadrado blanco centrado sobre negro: el barril desplaza sus bordes
+    img = Image.new("RGBA", (200, 200), (0, 0, 0, 255))
+    for x in range(60, 140):
+        for y in range(60, 140):
+            img.putpixel((x, y), (255, 255, 255, 255))
+    img.save(src)
+    res = server.motion_apply_effect(str(src), "barrel", str(out),
+                                     strength=0.5)
+    assert res["ok"] is True, res
+    orig = Image.open(src).convert("RGB")
+    got = Image.open(out).convert("RGB")
+    # el borde del cuadrado se curva: algún píxel del borde cambia
+    assert any(got.getpixel((x, y)) != orig.getpixel((x, y))
+               for x in (61, 63, 137, 139) for y in range(70, 130, 5))
+    assert got.size == orig.size
+
+
+def test_distort_swirl(tmp_path):
+    src = tmp_path / "in.png"
+    out = tmp_path / "out.png"
+    _half_half_png(src)
+    res = server.motion_apply_effect(str(src), "swirl", str(out),
+                                     strength=2.0)
+    assert res["ok"] is True, res
+    orig = Image.open(src).convert("RGB")
+    got = Image.open(out).convert("RGB")
+    # el remolino rota la región central
+    assert any(got.getpixel((x, y)) != orig.getpixel((x, y))
+               for x in range(70, 130, 5) for y in range(70, 130, 5))
+    assert got.size == orig.size
+
+
+def test_unknown_effect(tmp_path):
+    src = tmp_path / "in.png"
+    out = tmp_path / "out.png"
+    _make_png(src)
+    res = server.motion_apply_effect(str(src), "nope", str(out))
+    assert res["ok"] is False, res
+    assert "unknown effect" in res["error"]
+
+
+def test_retime_blend_slowmo(tmp_path):
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    for i in range(4):
+        _make_png(frames / f"frame_{i+1:05d}.png",
+                  color=(i * 60, 0, 0, 255))
+    out = tmp_path / "slow"
+    res = server.motion_retime(str(frames), str(out), speed=0.5,
+                               mode="blend")
+    assert res["ok"] is True, res
+    assert res["input_frames"] == 4
+    assert res["frame_count"] == 7  # (4-1)//0.5 + 1
+    assert res["duration_multiplier"] == 2.0
+    # frame intermedio i=1 → t=0.5: blend 50/50 entre colores 0 y 60
+    mid = Image.open(Path(out) / "frame_00001.png").convert("RGB")
+    assert mid.getpixel((5, 5)) == (30, 0, 0)
+    # el primer frame es idéntico al original
+    first = Image.open(Path(out) / "frame_00000.png").convert("RGB")
+    assert first.getpixel((5, 5)) == (0, 0, 0)
+
+
+def test_retime_duplicate_and_errors(tmp_path):
+    frames = tmp_path / "frames"
+    frames.mkdir()
+    for i in range(4):
+        _make_png(frames / f"frame_{i+1:05d}.png",
+                  color=(i * 60, 0, 0, 255))
+    out = tmp_path / "slow2"
+    res = server.motion_retime(str(frames), str(out), speed=0.5,
+                               mode="duplicate")
+    assert res["ok"] is True, res
+    assert res["frame_count"] == 7
+    mid = Image.open(Path(out) / "frame_00001.png").convert("RGB")
+    assert mid.getpixel((5, 5)) == (0, 0, 0)  # t=0.5 → frame 0 exacto
+
+    bad = server.motion_retime(str(frames), str(tmp_path / "x"), speed=0)
+    assert bad["ok"] is False and "speed" in bad["error"]
+    bad2 = server.motion_retime(str(frames), str(tmp_path / "y"),
+                                mode="nope")
+    assert bad2["ok"] is False and "mode" in bad2["error"]
+    empty = server.motion_retime(str(tmp_path / "missing"),
+                                 str(tmp_path / "z"))
+    assert empty["ok"] is False and "frames" in empty["error"]

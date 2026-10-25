@@ -69,6 +69,62 @@ def extract_frames(video: str, output_dir: str, fps: int | None = None,
     }
 
 
+def retime_sequence(frames_dir: str, output_dir: str, speed: float = 0.5,
+                    mode: str = "blend") -> dict[str, Any]:
+    """Cámara lenta (speed<1) o rápida (speed>1) re-muestrando una secuencia.
+
+    speed: factor de tiempo (0.5 = cámara lenta 2x). El índice de tiempo de
+    salida i mapea a t = i * speed en la entrada. La salida se renderiza
+    después con motion_render_sequence al fps original → duración multiplicada
+    por 1/speed.
+
+    mode: "duplicate" (elige el frame vecino, exacto) o "blend"
+    (crossfade lineal entre los dos frames vecinos, suavizado).
+    """
+    src = Path(frames_dir)
+    out = Path(output_dir)
+    if speed <= 0:
+        return {"ok": False, "error": f"speed must be > 0, got {speed}"}
+    if mode not in ("duplicate", "blend"):
+        return {"ok": False, "error": f"unknown mode: {mode}"}
+    frames = sorted(src.glob("frame_*.png"))
+    if not frames:
+        return {"ok": False, "error": f"no frames found in {src}"}
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("frame_*.png"):
+        old.unlink()
+    n_in = len(frames)
+    n_out = int((n_in - 1) // speed) + 1
+    images: dict[int, Image.Image] = {}
+    written = 0
+    for i in range(n_out):
+        t = i * speed
+        i0 = min(int(t), n_in - 1)
+        i1 = min(i0 + 1, n_in - 1)
+        if mode == "duplicate" or i0 == i1:
+            idx = i0
+            if idx not in images:
+                images[idx] = Image.open(frames[idx]).convert("RGBA")
+            img = images[idx]
+        else:
+            for idx in (i0, i1):
+                if idx not in images:
+                    images[idx] = Image.open(frames[idx]).convert("RGBA")
+            frac = t - i0
+            img = Image.blend(images[i0], images[i1], frac)
+        img.save(out / f"frame_{i:05d}.png")
+        written += 1
+    return {
+        "ok": True,
+        "output_dir": str(out),
+        "frame_count": written,
+        "input_frames": n_in,
+        "speed": speed,
+        "mode": mode,
+        "duration_multiplier": 1.0 / speed,
+    }
+
+
 def _default_font(size: int) -> ImageFont.FreeTypeFont:
     candidates = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
