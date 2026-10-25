@@ -1,0 +1,5 @@
+#!/bin/sh
+# Launcher for the motion-mcp server.
+set -e
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "$DIR/.venv/bin/python" -m motion_mcp "$@"

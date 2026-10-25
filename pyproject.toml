@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "motion-mcp"
+version = "0.1.0"
+description = "MCP server for motion graphics / After Effects-like composition"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+motion-mcp = "motion_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["motion_mcp*"]
